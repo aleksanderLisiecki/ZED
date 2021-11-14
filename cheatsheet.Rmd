@@ -1,0 +1,41 @@
+---
+title: "ggplot_cheatsheet"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, message=F}
+require(ggplot2)
+require(dplyr)
+
+pokemons <- read.csv("C:/Users/alili/Downloads/pokemons.csv")
+```
+
+```{r}
+diamonds %>%
+  ggplot(aes(x=depth, fill=cut)) + 
+  geom_histogram(binwidth = .2) +
+  xlim(55,70) + 
+  facet_wrap(~cut)
+```
+
+```{r}
+pokemons %>%
+  ggplot(aes(x=type, fill=factor(type))) + 
+  geom_bar() + 
+  coord_flip() + 
+  theme_minimal()
+```
+
+```{r}
+pokemons %>%
+  ggplot(aes(x=type, fill=factor(type))) +
+  geom_bar(alpha=.5) + 
+  geom_point(mapping = aes(y = hp)) +
+  coord_flip()
+```
+
