@@ -3,17 +3,22 @@ title: "ggplot_cheatsheet"
 output: html_document
 ---
 
+## Check this out!
+https://www.rstudio.com/resources/cheatsheets/
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Haloo Julciaaa hihi ;* 
+```{r, include=FALSE}
+pokemons <- read.csv("C:/Users/alili/Downloads/pokemons.csv")
+```
 
 ```{r, message=F}
 require(ggplot2)
+require(plotly)
 require(dplyr)
-
-pokemons <- read.csv("C:/Users/alili/Downloads/pokemons.csv")
 ```
 
 ```{r}
@@ -25,11 +30,13 @@ diamonds %>%
 ```
 
 ```{r}
-pokemons %>%
+interactive_plot <- pokemons %>%
   ggplot(aes(x=type, fill=factor(type))) + 
   geom_bar() + 
   coord_flip() + 
   theme_minimal()
+
+ggplotly(interactive_plot)
 ```
 
 ```{r}
@@ -39,4 +46,3 @@ pokemons %>%
   geom_point(mapping = aes(y = hp)) +
   coord_flip()
 ```
-
