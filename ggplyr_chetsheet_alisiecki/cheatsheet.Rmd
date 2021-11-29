@@ -1,0 +1,51 @@
+---
+title: "ggplot_cheatsheet"
+output: html_document
+---
+
+## Check this out!
+https://www.rstudio.com/resources/cheatsheets/
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+pokemons <- read.csv("C:/Users/alili/Downloads/pokemons.csv")
+```
+
+```{r, message=F}
+require(ggplot2)
+require(plotly)
+require(dplyr)
+```
+
+```{r}
+diamonds %>%
+  ggplot(aes(x=depth, fill=cut)) + 
+  geom_histogram(binwidth = .2) +
+  xlim(55,70) + 
+  facet_wrap(~cut)
+```
+
+```{r}
+interactive_plot <- pokemons %>%
+  ggplot(aes(x=type, fill=factor(type))) + 
+  geom_bar() + 
+  coord_flip() + 
+  theme_minimal()
+
+ggplotly(interactive_plot)
+```
+
+```{r}
+pokemons %>%
+  ggplot(aes(x=type,y=hp, fill=factor(type))) +
+  #geom_bar(alpha=.5) + 
+  #geom_point(mapping = aes(y = hp)) +
+  #coord_flip() + 
+  geom_line()
+  geom_line(aes(x=type, y=), data= mean_type_hp)
+  
+```

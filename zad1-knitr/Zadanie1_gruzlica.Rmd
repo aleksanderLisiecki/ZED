@@ -1,0 +1,101 @@
+---
+title: "Zadanie1_gruzlica"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Ładowanie bibliotek
+
+```{r, warning=FALSE ,message=FALSE}
+library(EDAWR)
+library(knitr)
+library(dplyr)
+```
+
+## Wczytywanie i cashowanie danych
+
+```{r, cache=TRUE}
+df <- tb
+```
+
+
+## Prezentacja danych
+
+```{r}
+kable(head(df))
+```
+
+## Czyszczenie danych
+Usuwanie niekompletnych wierszy
+
+```{r}
+df <- df[complete.cases(df),]
+```
+
+
+## Liczba zachorowań z podziałem na płeć
+
+```{r}
+df %>% 
+  group_by(sex) %>%
+  summarise(cases = sum(child, adult, elderly)) %>%
+  kable()
+```
+
+## Funkcja do rysowania wykresu
+
+```{r}
+summary_plot_drawer <- function(df, country_name = NULL){
+  chart_title <- "Sumaryczna liczba zachorowań z podziałem na grupy wiekowe"
+  if(!is.null(country_name)){
+    chart_title <- paste(chart_title, 'dla', country_name, sep= ' ')
+  }
+  
+  plot(df$year, 
+       df$child, 
+       ylim = c(min(select(df, child:elderly)), max(select(df, child:elderly))),
+       ylab = 'liczba chorych',
+       xlab = 'rok',
+       type = 'l', 
+       col = 'red', 
+       main =  chart_title)
+  lines(df$year, df$adult, col = 'green')
+  lines(df$year, df$elderly, col = 'blue')
+  legend("topleft",
+         c("child","adult","elderly"),
+         fill=c("red","green","blue")
+         )
+}
+```
+
+
+## Sumaryczna liczba zachorowań z podziałem na grupy wiekowe
+
+```{r}
+df %>%
+  select(year, child, adult, elderly)%>%
+  group_by(year) %>%
+  summarise(child = sum(child), adult = sum(adult), elderly = sum(elderly)) -> groupped_df
+
+summary_plot_drawer(groupped_df)
+```
+## Sumaryczna liczba zachorowań z podziałem na grupy wiekowe dla każdego kraju
+
+```{r, message=FALSE}
+df %>%
+  select(country, year, child, adult, elderly)%>%
+  group_by(country, year) %>%
+  summarise(child = sum(child), adult = sum(adult), elderly = sum(elderly)) -> groupped_df
+
+for(i in unique(groupped_df$country)){
+  
+  df_by_country = filter(groupped_df, country == i)
+  df_by_country <- df_by_country[-1]
+  
+  summary_plot_drawer(df_by_country, i)
+}
+```
+
