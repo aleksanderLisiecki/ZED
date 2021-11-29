@@ -1,0 +1,160 @@
+---
+title: "projekt_ZED"
+author: "alisiecki"
+date: "20 11 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Użyte biblioteki
+
+```{r, message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(tidyr)
+```
+
+## Wczytanie zbiorów danych z plików
+
+```{r, cache=TRUE}
+Gold_prices <- read.csv("C:/Users/alili/Downloads/Data pack/Gold prices.csv")
+
+World_Development_Indicators <- read_excel("C:/Users/alili/Downloads/Data pack/World_Development_Indicators.xlsx", na = '..')
+
+`S&P_Composite` <- read.csv("C:/Users/alili/Downloads/Data pack/S&P Composite.csv")
+```
+
+> ### Gold Prices
+
+#### Czyszczenie danych:
+
+* zmiana na właściwy typ kolumny z datą,
+* zmiana nazw kolumn dla AM and PM fixing,
+* pozostawienie do dalszych rozważań jedynie ceny w walucie USD.
+* uzupełnijnie brakujących wartości (NA) w kolumnach z ceną otwarcia i zamknięcia, wartością z sąsiedniej kolumny (w całym zbiorze nie ma sytuacji gdzie brakują obydwie)
+
+```{r}
+Gold.prices <- Gold_prices %>% 
+  mutate(Date = as.Date(Date)) %>%
+  rename(USD.Morning.Fix = USD..AM., USD.Afternoon.Fix = USD..PM.) %>%
+  select(Date, USD.Morning.Fix, USD.Afternoon.Fix) %>%
+  mutate(USD.Morning.Fix = coalesce(USD.Morning.Fix, USD.Afternoon.Fix)) %>%
+  mutate(USD.Afternoon.Fix = coalesce(USD.Afternoon.Fix, USD.Morning.Fix)) 
+```
+
+#### Podsumowanie danych:
+
+```{r}
+head(Gold.prices)
+nrow(Gold.prices)
+summary(Gold.prices)
+```
+
+#### Analiza wartości ceny otwarcia i zamknięcia
+
+Na wykresie widzimy zmianę cen otwarcia oraz zamknięcia w czasie.
+
+```{r}
+ggplot(Gold.prices, aes(x = Date)) +
+  geom_point(aes(y = USD.Afternoon.Fix), color = "darkblue") +
+  geom_point(aes(y = USD.Morning.Fix), color = "yellow")
+```
+
+
+> ### S&P Composite
+
+```{r}
+head(`S&P_Composite`)
+```
+
+
+#### Czyszczenie danych:
+
+* zmiana na właściwy typ kolumny z datą,
+* zmiana nazw kolumn dla AM and PM fixing,
+* pozostawienie do dalszych rozważań jedynie ceny w walucie USD.
+* uzupełnijnie brakujących wartości (NA) w kolumnach z ceną, wartością z sąsiedniej kolumny (w całym zbiorze nie ma sytuacji gdzie brakują obydwie)
+
+```{r}
+Gold.prices <- Gold_prices %>% 
+  mutate(Date = as.Date(Date)) %>%
+  rename(USD.Morning.Fix = USD..AM., USD.Afternoon.Fix = USD..PM.) %>%
+  select(Date, USD.Morning.Fix, USD.Afternoon.Fix) %>%
+  mutate(USD.Morning.Fix = coalesce(USD.Morning.Fix, USD.Afternoon.Fix)) %>%
+  mutate(USD.Afternoon.Fix = coalesce(USD.Afternoon.Fix, USD.Morning.Fix)) 
+```
+
+```{r}
+SP_Composite <- `S&P_Composite` %>%
+  rename(Date = Year) %>%
+  mutate(Date = as.Date(Date)) 
+  
+```
+
+```{r}
+SP_Composite %>%
+  ggplot(aes(x=Date)) +
+  geom_point(aes(y = S.P.Composite), color = "blue") +
+  geom_point(aes(y = Real.Price), color = "red") 
+```
+
+
+
+#### Podsumowanie danych:
+
+```{r}
+head(Gold.prices)
+nrow(Gold.prices)
+summary(Gold.prices)
+```
+
+
+
+
+> ### World development indicators
+
+Wyodrębnienie kodów serii do osobnej tabeli oraz usunięcie jej z przetwarzanego zbioru.
+
+```{r}
+World_Development_Indicators.Series_Codes <- select(World_Development_Indicators, `Series Name`, `Series Code`)
+
+World_Development_Indicators <- select(World_Development_Indicators, -`Series Code`)
+
+head(World_Development_Indicators)
+```
+
+### Czyszczenie zbioru World_Development_Indicators:
+- zamiana nieznanych wartości z ".." na NA,
+- przeniesienie zmiennych do osobnych kolumn,
+- przeniesienie pojedyńczych obserwacji do osobnych wierszy
+
+```{r}
+df <- World_Development_Indicators
+
+df[df == '..'] <- NA
+
+df <- df %>% 
+  pivot_longer(cols = `1970 [YR1970]`:`2020 [YR2020]`, names_to = "Year") %>%
+  pivot_wider(names_from = `Series Name`) 
+
+head(df)
+```
+
+
+```{r}
+df <- World_Development_Indicators %>% 
+  pivot_longer(cols = `1970 [YR1970]`:`2020 [YR2020]`, names_to = "Year") %>%
+  pivot_wider(names_from = `Series Name`) 
+
+
+df[df == '..'] <- NA
+
+
+head(df)
+```
+
+
