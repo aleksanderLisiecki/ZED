@@ -21,32 +21,41 @@ library(tidyr)
 ## Wczytanie zbiorów danych z plików
 
 ```{r, cache=TRUE}
-Gold_prices <- read.csv("C:/Users/alili/Downloads/Data pack/Gold prices.csv")
 
-World_Development_Indicators <- read_excel("C:/Users/alili/Downloads/Data pack/World_Development_Indicators.xlsx", na = '..')
-
-`S&P_Composite` <- read.csv("C:/Users/alili/Downloads/Data pack/S&P Composite.csv")
+`S&P_Composite` <- read.csv("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/S&P Composite.csv")
 ```
 
 > ### Gold Prices
 
-#### Czyszczenie danych:
+#### Wczytywanie i czyszczenie danych:
 
-* zmiana na właściwy typ kolumny z datą,
+* nadanie właściwych typów danych,
+* pozostawienie do dalszych rozważań jedynie ceny w walucie USD,
 * zmiana nazw kolumn dla AM and PM fixing,
-* pozostawienie do dalszych rozważań jedynie ceny w walucie USD.
+
+```{r, cache=TRUE}
+Gold.prices <- read.csv("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/Gold prices.csv", 
+                        colClasses = c(rep("Date", 1),
+                                       rep("numeric", 2),
+                                       rep("NULL", 4)),
+                        col.names = c('Date',
+                                      'Morning.Fix.USD',
+                                      'Afternoon.Fix.USD',
+                                      rep("NULL", 4)),
+                        header = TRUE)
+```
+
 * uzupełnijnie brakujących wartości (NA) w kolumnach z ceną otwarcia i zamknięcia, wartością z sąsiedniej kolumny (w całym zbiorze nie ma sytuacji gdzie brakują obydwie)
 
 ```{r}
-Gold.prices <- Gold_prices %>% 
-  mutate(Date = as.Date(Date)) %>%
-  rename(USD.Morning.Fix = USD..AM., USD.Afternoon.Fix = USD..PM.) %>%
-  select(Date, USD.Morning.Fix, USD.Afternoon.Fix) %>%
-  mutate(USD.Morning.Fix = coalesce(USD.Morning.Fix, USD.Afternoon.Fix)) %>%
-  mutate(USD.Afternoon.Fix = coalesce(USD.Afternoon.Fix, USD.Morning.Fix)) 
+Gold.prices <- Gold.prices %>% 
+  mutate(Morning.Fix.USD = coalesce(Morning.Fix.USD, Afternoon.Fix.USD)) %>%
+  mutate(Afternoon.Fix.USD = coalesce(Afternoon.Fix.USD, Morning.Fix.USD)) 
 ```
 
 #### Podsumowanie danych:
+
+Zbiór zawiera codzienne wyceny złota podczas sesji otwarcia i zamknięcia od dnia 1968-01-02 do 2021-09-29.
 
 ```{r}
 head(Gold.prices)
@@ -60,8 +69,8 @@ Na wykresie widzimy zmianę cen otwarcia oraz zamknięcia w czasie.
 
 ```{r}
 ggplot(Gold.prices, aes(x = Date)) +
-  geom_point(aes(y = USD.Afternoon.Fix), color = "darkblue") +
-  geom_point(aes(y = USD.Morning.Fix), color = "yellow")
+  geom_point(aes(y = Afternoon.Fix.USD), color = "darkblue") +
+  geom_point(aes(y = Morning.Fix.USD), color = "yellow")
 ```
 
 
@@ -79,14 +88,14 @@ head(`S&P_Composite`)
 * pozostawienie do dalszych rozważań jedynie ceny w walucie USD.
 * uzupełnijnie brakujących wartości (NA) w kolumnach z ceną, wartością z sąsiedniej kolumny (w całym zbiorze nie ma sytuacji gdzie brakują obydwie)
 
-```{r}
+
 Gold.prices <- Gold_prices %>% 
   mutate(Date = as.Date(Date)) %>%
   rename(USD.Morning.Fix = USD..AM., USD.Afternoon.Fix = USD..PM.) %>%
   select(Date, USD.Morning.Fix, USD.Afternoon.Fix) %>%
   mutate(USD.Morning.Fix = coalesce(USD.Morning.Fix, USD.Afternoon.Fix)) %>%
   mutate(USD.Afternoon.Fix = coalesce(USD.Afternoon.Fix, USD.Morning.Fix)) 
-```
+
 
 ```{r}
 SP_Composite <- `S&P_Composite` %>%
@@ -112,49 +121,44 @@ nrow(Gold.prices)
 summary(Gold.prices)
 ```
 
-
-
-
 > ### World development indicators
 
-Wyodrębnienie kodów serii do osobnej tabeli oraz usunięcie jej z przetwarzanego zbioru.
+#### Wczytywanie zbioru danych
+```{r}
+World_Development_Indicators <- read_excel("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/World_Development_Indicators.xlsx", na = '..')
+```
+
+#### Czyszczenie zbioru:
+
+* wyodrębnienie kodów serii do osobnej tabeli oraz usunięcie jej z przetwarzanego zbioru,
+* przeniesienie zmiennych do osobnych kolumn,
 
 ```{r}
 World_Development_Indicators.Series_Codes <- select(World_Development_Indicators, `Series Name`, `Series Code`)
-
 World_Development_Indicators <- select(World_Development_Indicators, -`Series Code`)
+```
 
+* przeniesienie pojedyńczych obserwacji do osobnych wierszy
+
+```{r}
+World_Development_Indicators <- World_Development_Indicators %>%
+  pivot_longer(cols = `1970 [YR1970]`:`2020 [YR2020]`, names_to = "Year") %>%
+  group_by(`Series Name`) %>%
+  mutate(row = row_number()) %>%
+  tidyr::pivot_wider(names_from = `Series Name`, values_from = value) %>%
+  select(-row)
+```
+
+* poprawa kolumny Year: wyodrębnienie lat jako numerycznych wartości
+
+```{r}
+World_Development_Indicators <- World_Development_Indicators %>%
+  mutate(Year = as.numeric(substr(Year, 1, 4)))
+```
+
+```{r}
 head(World_Development_Indicators)
 ```
 
-### Czyszczenie zbioru World_Development_Indicators:
-- zamiana nieznanych wartości z ".." na NA,
-- przeniesienie zmiennych do osobnych kolumn,
-- przeniesienie pojedyńczych obserwacji do osobnych wierszy
-
-```{r}
-df <- World_Development_Indicators
-
-df[df == '..'] <- NA
-
-df <- df %>% 
-  pivot_longer(cols = `1970 [YR1970]`:`2020 [YR2020]`, names_to = "Year") %>%
-  pivot_wider(names_from = `Series Name`) 
-
-head(df)
-```
-
-
-```{r}
-df <- World_Development_Indicators %>% 
-  pivot_longer(cols = `1970 [YR1970]`:`2020 [YR2020]`, names_to = "Year") %>%
-  pivot_wider(names_from = `Series Name`) 
-
-
-df[df == '..'] <- NA
-
-
-head(df)
-```
 
 
