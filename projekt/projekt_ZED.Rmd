@@ -18,13 +18,6 @@ library(readxl)
 library(tidyr)
 ```
 
-## Wczytanie zbiorów danych z plików
-
-```{r, cache=TRUE}
-
-`S&P_Composite` <- read.csv("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/S&P Composite.csv")
-```
-
 > ### Gold Prices
 
 #### Wczytywanie i czyszczenie danych:
@@ -74,53 +67,6 @@ ggplot(Gold.prices, aes(x = Date)) +
 ```
 
 
-> ### S&P Composite
-
-```{r}
-head(`S&P_Composite`)
-```
-
-
-#### Czyszczenie danych:
-
-* zmiana na właściwy typ kolumny z datą,
-* zmiana nazw kolumn dla AM and PM fixing,
-* pozostawienie do dalszych rozważań jedynie ceny w walucie USD.
-* uzupełnijnie brakujących wartości (NA) w kolumnach z ceną, wartością z sąsiedniej kolumny (w całym zbiorze nie ma sytuacji gdzie brakują obydwie)
-
-
-Gold.prices <- Gold_prices %>% 
-  mutate(Date = as.Date(Date)) %>%
-  rename(USD.Morning.Fix = USD..AM., USD.Afternoon.Fix = USD..PM.) %>%
-  select(Date, USD.Morning.Fix, USD.Afternoon.Fix) %>%
-  mutate(USD.Morning.Fix = coalesce(USD.Morning.Fix, USD.Afternoon.Fix)) %>%
-  mutate(USD.Afternoon.Fix = coalesce(USD.Afternoon.Fix, USD.Morning.Fix)) 
-
-
-```{r}
-SP_Composite <- `S&P_Composite` %>%
-  rename(Date = Year) %>%
-  mutate(Date = as.Date(Date)) 
-  
-```
-
-```{r}
-SP_Composite %>%
-  ggplot(aes(x=Date)) +
-  geom_point(aes(y = S.P.Composite), color = "blue") +
-  geom_point(aes(y = Real.Price), color = "red") 
-```
-
-
-
-#### Podsumowanie danych:
-
-```{r}
-head(Gold.prices)
-nrow(Gold.prices)
-summary(Gold.prices)
-```
-
 > ### World development indicators
 
 #### Wczytywanie zbioru danych
@@ -156,9 +102,74 @@ World_Development_Indicators <- World_Development_Indicators %>%
   mutate(Year = as.numeric(substr(Year, 1, 4)))
 ```
 
+#### Podsumowanie danych:
+
+Zbiór zawiera pierdyliard wskaźników - trzeba wybrać potrzebne.
+
 ```{r}
-head(World_Development_Indicators)
+ncol(World_Development_Indicators)
+nrow(World_Development_Indicators)
+#summary(World_Development_Indicators)
 ```
 
 
+> ### S&P Composite
+
+#### Wczytywanie danych
+
+```{r}
+SP.Composite <- read.csv("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/S&P Composite.csv")
+```
+
+#### Czyszczenie danych:
+
+* zmiana nazwy oraz typ na właściwy kolumny z datą
+* zmiana nazwy Cyclicaly.Adjusted.PE.Ratio na skrót CAPE -
+
+```{r}
+SP.Composite <- SP.Composite %>%
+  rename(Date = Year,
+         CAPE = Cyclically.Adjusted.PE.Ratio) %>%
+  mutate(Date = as.Date(Date))
+```
+
+#### Podsumowanie danych
+
+```{r}
+head(SP.Composite)
+ncol(SP.Composite)
+nrow(SP.Composite)
+summary(SP.Composite)
+```
+
+#### Znaczenie atrybutów:
+
+* S.P.Composite - nominalna wartość indexu,
+* Divident - nominalna dywidenta,
+* Earnings - nominalne zarobki na indeksie,
+* CPI - wskaźnik cen towarów i usług konsumpcyjnych. Najpopularniejsza na świecie miara inflacji/deflacji,
+* Long.Interest.Rate - stopy procentowe dziesięcioletnich obligacji rządowych,
+* Real.Price - realna wartość indexu,
+* Real.Divident - realna dywidenta,
+* Real.Earnings - realne zarobki na indeksie,
+* CAPE (Cyclicaly.Adjusted.PE.Ratio) - cyklicznie dostosowywany wskaźnik ceny do zysków. Definiuje się go jako cenę podzieloną przez średnią z dziesięciu lat zarobków, skorygowaną o inflację.
+
+```{r}
+SP.Composite %>%
+  ggplot(aes(x=Date)) +
+  geom_point(aes(y = S.P.Composite), color = "blue") +
+  geom_point(aes(y = Real.Price), color = "red") +
+  geom_point(aes(y = CPI), color = "yellow") +
+  ylim(0, 1000)
+```
+
+
+
+#### Podsumowanie danych:
+
+```{r}
+head(Gold.prices)
+nrow(Gold.prices)
+summary(Gold.prices)
+```
 
