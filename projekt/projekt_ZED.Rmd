@@ -118,6 +118,20 @@ World_Development_Indicators <- World_Development_Indicators %>%
   mutate(Year = as.numeric(substr(Year, 1, 4)))
 ```
 
+* pozostawiam 100 atrybutów, które mają najwięcej danych (najmniej wartości pustych) - nie jest to idealny sposób, ponieważ część państw może nie podawać w ogóle danych na różne wskaźniki, 
+
+```{r}
+World_Development_Indicators %>%
+  select(-(1:3)) %>%
+  summarise_all(funs(sum(is.na(.)))) %>%
+  t %>%
+  data.frame() %>%
+  top_n(-100)
+  
+```
+
+
+
 #### Podsumowanie danych:
 
 Zbiór zawiera pierdyliard wskaźników - trzeba wybrać potrzebne.
@@ -125,7 +139,7 @@ Zbiór zawiera pierdyliard wskaźników - trzeba wybrać potrzebne.
 ```{r}
 ncol(World_Development_Indicators)
 nrow(World_Development_Indicators)
-#summary(World_Development_Indicators)
+summary(World_Development_Indicators)
 ```
 
 ***
@@ -229,7 +243,40 @@ World_Development_Indicators %>%
   geom_bar() +
   theme_minimal()
 
+```
 
+Samobójstwa na świecie kobiet i mężczyzn w latach 2000-2019:
+
+```{r}
+
+suicides <- World_Development_Indicators %>%
+  filter(`Country Name` == 'World') %>%
+  select(Year, `Suicide mortality rate, female (per 100,000 female population)`, `Suicide mortality rate, male (per 100,000 male population)`) %>%
+  filter(!is.na(`Suicide mortality rate, female (per 100,000 female population)`))
+
+suicides.male <- suicides %>%
+  select(Year, `Suicide mortality rate, male (per 100,000 male population)`) %>%
+  rename(`Suicide mortality rate (per 100,000 of given gender population)` = `Suicide mortality rate, male (per 100,000 male population)`) %>%
+  mutate(gender = 'male')
+
+suicides.female <- suicides %>%
+  select(Year, `Suicide mortality rate, female (per 100,000 female population)`) %>%
+  rename(`Suicide mortality rate (per 100,000 of given gender population)` = `Suicide mortality rate, female (per 100,000 female population)`) %>%
+  mutate(gender = 'female')
+
+suicides.per.gender <- rbind.data.frame(suicides.male, suicides.female)
+
+suicides.per.gender %>%
+  ggplot(aes(x = Year, y = `Suicide mortality rate (per 100,000 of given gender population)`)) +
+  geom_line(aes(colour = gender), size = 1) +
+  geom_point(colour = 'royalblue', size = 2) +
+  expand_limits(y = 0) +
+  ggtitle('Suicide mortality rate (per 100,000 of given gender population)') +
+  ylab('') +
+  theme_bw() -> p
+  ggplotly(p)
 
 ```
 
+Wniosek: 
+Liczba samobójstw jest w trendzie spadkowym, zdrowie psychiczne ludzkości się polepsza.  
