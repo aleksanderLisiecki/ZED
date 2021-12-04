@@ -17,6 +17,8 @@ library(plotly)
 library(ggplot2)
 library(readxl)
 library(tidyr)
+library(knitr)
+library(kableExtra)
 ```
 
 ***
@@ -78,8 +80,6 @@ ggplot(Gold.prices, aes(x = Date)) +
 World_Development_Indicators <- read_excel("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/World_Development_Indicators.xlsx", 
                                            na = '..', 
                                            range = "A1:BC44305")
-
-unique(World_Development_Indicators$`Country Name`)
 ```
 
 #### Czyszczenie zbioru:
@@ -120,7 +120,7 @@ World_Development_Indicators <- World_Development_Indicators %>%
 
 * pozostawiam 100 atrybutów, które mają najwięcej danych (najmniej wartości pustych) - nie jest to idealny sposób, ponieważ część państw może nie podawać w ogóle danych na różne wskaźniki, 
 
-```{r}
+```{}
 World_Development_Indicators %>%
   select(-(1:3)) %>%
   summarise_all(funs(sum(is.na(.)))) %>%
@@ -134,13 +134,41 @@ World_Development_Indicators %>%
 
 #### Podsumowanie danych:
 
-Zbiór zawiera pierdyliard wskaźników - trzeba wybrać potrzebne.
+Zbiór zawiera pierdyliard wskaźników.
 
-```{r}
-ncol(World_Development_Indicators)
-nrow(World_Development_Indicators)
-summary(World_Development_Indicators)
+:::: {style="display: grid; grid-template-columns: 1fr 1fr; grid-column-gap: 10px; "}
+
+::: {}
+
+```{r, echo=FALSE}
+World_Development_Indicators$`Country Name` %>%
+  unique %>%
+  data.frame() %>%
+  rename('Lista krajów dostępnych w zbiorze' = '.') %>%
+  kable() %>%
+  kable_styling("striped", full_width = F) %>%
+  scroll_box( height = '400px')
 ```
+
+:::
+
+::: {}
+
+```{r, echo=FALSE}
+World_Development_Indicators %>%
+  names %>%
+  data.frame() %>%
+  rename('Lista dostępnych wskaźników' = '.') %>%
+  kable %>%
+  kable_styling("striped", full_width = F) %>%
+  scroll_box(width = '650px', height = '400px')
+```
+
+:::
+
+::::
+
+
 
 ***
 
@@ -215,39 +243,70 @@ Currency.Exchange.Rates <- Currency.Exchange.Rates %>%
 
 #### Podsumowanie danych:
 
-Zbiór zawiera codzienne wyceny złota podczas sesji otwarcia i zamknięcia od dnia 1968-01-02 do 2021-09-29.
+Zbiór zawiera codzienny kurs wymiany walut od dnia 1995-01-02 do 2018-05-02.
 
 ```{r}
-ncol(Currency.Exchange.Rates)
-nrow(Currency.Exchange.Rates)
-summary(Currency.Exchange.Rates)
+Currency.Exchange.Rates %>%
+  names %>%
+  data.frame() %>%
+  rename('Dostępne waluty' = '.') %>%
+  kable %>%
+  kable_styling("striped", full_width = F) %>%
+  scroll_box(width = '400px', height = '400px')
+
 ```
 
+***
 ***
 
 > #### Analizy:
 
-#### Interaktywny wykres zmiany liczby ludności w czasie:
+***
 
-```{}
-World_Development_Indicators %>%
+#### Animowany wykres zmiany liczby ludności w czasie (Wcisnąć play z puszczoną w tle piosenką Queen "Another One Bites the Dust"):
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=9,fig.height=6}
+specify_decimal <- function(x, k) trimws(format(round(x, k), nsmall=k))
+
+World.Population.Top10 <- World_Development_Indicators %>%
+  filter(`Country Name` != "World") %>%
+  rename(Population = `Population, total`) %>%
+  select(`Country Name`, Year, Population) %>%
   group_by(Year) %>%
-  summarise(`Country Name`, Year = 2000, `Urban population`) %>%
-  arrange(`Urban population`, .by_group = T) %>%
-  top_n(10)
-  ggplot(aes(x = `Country Name`, y = `Urban population`)) +
-  geom_col()
-  
-  ggplot(aes(x = `Country Name`, group = `Urban population`,fill=factor(`Urban population`)`)) +
-  coord_flip() +
-  geom_bar() +
-  theme_minimal()
+  arrange(desc(Population), .by_group = T) %>%
+  top_n(11) %>%
+  mutate(`Population in mln` = Population/10^6, Rank = rank(Population))
 
+p <- World.Population.Top10 %>%
+  ggplot(aes(Rank, Population, fill = `Country Name`)) +
+  geom_col(aes(frame = Year), position = "identity") +
+  geom_text(aes(frame = Year, y = Population + 1.5*10^8, label = paste0(round(`Population in mln`,2), 'mln')), hjust = 0) +
+  geom_text(aes(frame = Year, y = `Population in mln`/2, label = `Country Name`), hjust = 0) +
+  ylim(-10^8,1.6*10^9) +
+  coord_flip() +
+  theme_minimal() +
+  ggtitle("Populacja świata w latach 1970-2020") +
+  theme(axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position="none",
+        plot.title=element_text(size=22, hjust=0.5, face="bold", colour="grey")) 
+
+ggplotly(p)
 ```
 
-Samobójstwa na świecie kobiet i mężczyzn w latach 2000-2019:
-
 ```{r}
+World.Population.Top10 
+```
+
+***
+
+#### Samobójstwa kobiet i mężczyzn na świecie w latach 2000-2019:
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 
 suicides <- World_Development_Indicators %>%
   filter(`Country Name` == 'World') %>%
@@ -271,7 +330,7 @@ suicides.per.gender %>%
   geom_line(aes(colour = gender), size = 1) +
   geom_point(colour = 'royalblue', size = 2) +
   expand_limits(y = 0) +
-  ggtitle('Suicide mortality rate (per 100,000 of given gender population)') +
+  ggtitle('Współczynnik samobójstw (na 100,000 osób danej płci)') +
   ylab('') +
   theme_bw() -> p
   ggplotly(p)
@@ -280,3 +339,17 @@ suicides.per.gender %>%
 
 Wniosek: 
 Liczba samobójstw jest w trendzie spadkowym, zdrowie psychiczne ludzkości się polepsza.  
+
+***
+
+#### Korelacja atrybutów zbioru World Development Indicators do ceny złota:
+
+```{}
+df.gold <- Gold.prices %>%
+  arrange(desc(row_number()))
+
+df.WDI <- World_Development_Indicators %>%
+  filter(`Country Name` == "USA")
+
+```
+
