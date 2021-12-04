@@ -44,12 +44,24 @@ Gold.prices <- read.csv("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Dat
 ```
 
 * uzupełnijnie brakujących wartości (NA) w kolumnach z ceną otwarcia i zamknięcia, wartością z sąsiedniej kolumny (w całym zbiorze nie ma sytuacji gdzie brakują obydwie)
+* dodanie kolumny USD z uśrednioną ceną otwarcia i zamknięcia
 
 ```{r}
 Gold.prices <- Gold.prices %>% 
-  mutate(Morning.Fix.USD = coalesce(Morning.Fix.USD, Afternoon.Fix.USD)) %>%
-  mutate(Afternoon.Fix.USD = coalesce(Afternoon.Fix.USD, Morning.Fix.USD)) 
+  mutate(Morning.Fix.USD = coalesce(Morning.Fix.USD, Afternoon.Fix.USD),
+         Afternoon.Fix.USD = coalesce(Afternoon.Fix.USD, Morning.Fix.USD),
+         USD = (Morning.Fix.USD + Afternoon.Fix.USD) / 2)
 ```
+
+* utworzenie zbioru ze średnią roczną ceną złota
+
+```{r}
+Gold.prices.yearly <- Gold.prices %>%
+  mutate(Year = as.numeric(substr(Date, 1, 4))) %>%
+  group_by(Year) %>% 
+  summarize( USD = (mean(Morning.Fix.USD) + mean(Afternoon.Fix.USD)) / 2)
+```
+
 
 #### Podsumowanie danych:
 
@@ -257,6 +269,29 @@ Currency.Exchange.Rates %>%
 ```
 
 ***
+
+> ### Bitcoin price and trade volume
+
+#### Wczytywanie danych:
+
+```{r, cache=TRUE}
+Bitcoin.prices <- read.csv("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/Bitcoin/BCHAIN-MKPRU.csv",
+                           colClasses = c(rep("Date", 1),
+                                       rep("numeric", 1)),
+                           col.names = c('Date',
+                                      'USD'))
+
+Bitcoin.trade.volume <- read.csv("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/Bitcoin/BCHAIN-TRVOU.csv",
+                           colClasses = c(rep("Date", 1),
+                                       rep("numeric", 1)),
+                           col.names = c('Date',
+                                      'Trade Volume'))
+
+head(Bitcoin.prices)
+```
+
+
+***
 ***
 
 > #### Analizy:
@@ -284,7 +319,7 @@ p <- World.Population.Top10 %>%
   geom_text(aes(frame = Year, y = `Population in mln`/2, label = `Country Name`), hjust = 0) +
   ylim(-10^8,1.6*10^9) +
   coord_flip() +
-  theme_minimal() +
+  theme_bw() +
   ggtitle("Populacja świata w latach 1970-2020") +
   theme(axis.line=element_blank(),
         axis.text.x=element_blank(),
@@ -342,14 +377,91 @@ Liczba samobójstw jest w trendzie spadkowym, zdrowie psychiczne ludzkości się
 
 ***
 
-#### Korelacja atrybutów zbioru World Development Indicators do ceny złota:
+#### Korelacja ceny złota do ceny BTC:
 
-```{}
-df.gold <- Gold.prices %>%
-  arrange(desc(row_number()))
+```{r}
+gold <- Gold.prices %>%
+  select(Date, USD) %>%
+  arrange(desc(row_number())) %>%
+  filter( Date < '2021-09-29') %>%
+  filter( Date > '2016-01-01') %>%
+  rename( USD.gold = USD )
 
-df.WDI <- World_Development_Indicators %>%
-  filter(`Country Name` == "USA")
+BTC_price <- Bitcoin.prices %>%
+  arrange(desc(row_number())) %>%
+  filter( Date < '2021-09-29') %>%
+  filter( Date > '2016-01-01') %>%
+  rename( USD.BTC = USD )
 
+gold.btc <- gold %>%
+  inner_join(BTC_price, by = 'Date')
+
+
+cor.gold.btc <- cor(gold.btc$USD.gold, gold.btc$USD.BTC, use = "complete.obs")
+
+coeff.gold.btc <- max(gold.btc$USD.BTC)/max(gold.btc$USD.gold)
+
+gold.btc %>%
+  ggplot( aes(x = Date) ) +
+  geom_line( aes(y = USD.gold), color = 'yellow' ) +
+  geom_line( aes(y = USD.BTC/coeff.gold.btc), color = 'orange' ) + 
+  scale_y_continuous(
+    name = "Cena złota",
+    sec.axis = sec_axis(~.*coeff.gold.btc, name="Cena BTC")
+  ) +
+  ggtitle("Cena złota oraz BTC [USD]") +
+  theme_bw() + 
+  theme(
+    axis.title.y = element_text(color = 'yellow', size=13),
+    axis.title.y.right = element_text(color = 'orange', size=13),
+    axis.text.y = element_text(color = 'yellow', size=13),
+    axis.text.y.right = element_text(color = 'orange', size=13)
+  )
 ```
+
+Wniosek:
+Pomimo korelacji na poziomie 0.68 wizualna inspekcja nie pokazuje jasnej zależności pomiędzy cenami porównywanych aktywów.
+
+
+#### Korelacja złota oraz BTC z indexem S&P Composite
+
+```{r}
+Gold.prices.monthly <- Gold.prices %>%
+  mutate(Date = substr(Date, 1, 7)) %>%
+  group_by(Date) %>% 
+  summarize( USD = (mean(Morning.Fix.USD) + mean(Afternoon.Fix.USD)) / 2)
+
+SP.df <- SP.Composite %>%
+  mutate(Date = substr(Date, 1, 7)) %>%
+  select(Date, S.P.Composite)
+
+gold.SP <- Gold.prices.monthly %>%
+  inner_join(SP.df, by = 'Date') %>%
+  mutate(Date = as.Date(paste0(Date,'-01')))
+
+cor(gold.SP$USD, gold.SP$S.P.Composite, use = "complete.obs")
+
+coeff.gold.SP <- max(gold.SP$S.P.Composite)/max(gold.SP$USD)
+
+gold.SP %>%
+  ggplot( aes(x = Date) ) +
+  geom_line( aes(y = USD), color = 'orange' ) +
+  geom_line( aes(y = S.P.Composite/coeff.gold.SP), color = 'royalblue' ) + 
+  scale_y_continuous(
+    name = "Cena złota",
+    sec.axis = sec_axis(~.*coeff.gold.SP, name="Cena S&P Composite")
+  ) +
+  ggtitle("Cena złota oraz indeksu S&P Composite [USD]") +
+  theme_bw() + 
+  theme(
+    axis.title.y = element_text(color = 'orange', size=13),
+    axis.title.y.right = element_text(color = 'royalblue', size=13),
+    axis.text.y = element_text(color = 'orange', size=13),
+    axis.text.y.right = element_text(color = 'royalblue', size=13)
+  )
+```
+
+Wniosek:
+Pomimo korelacji na poziomie 0.82 wizualna inspekcja nie pokazuje jasnej zależności pomiędzy cenami porównywanych aktywów.
+
 
