@@ -6,3 +6,5 @@ tidyr
 plotly
 knitr
 kableExtra
+TTR
+data.table

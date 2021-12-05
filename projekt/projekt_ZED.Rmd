@@ -7,6 +7,8 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+set.seed(23)
 ```
 
 ## Użyte biblioteki
@@ -19,6 +21,8 @@ library(readxl)
 library(tidyr)
 library(knitr)
 library(kableExtra)
+library(TTR)
+library(data.table)
 ```
 
 ***
@@ -79,7 +83,7 @@ Na wykresie widzimy zmianę cen otwarcia w czasie.
 
 ```{r}
 ggplot(Gold.prices, aes(x = Date)) +
-  geom_point(aes(y = Morning.Fix.USD), color = "yellow")
+  geom_point(aes(y = Morning.Fix.USD), color = "gold")
 ```
 
 ***
@@ -216,15 +220,6 @@ SP.Composite <- SP.Composite %>%
 * Real.Earnings - realne zarobki na indeksie,
 * CAPE (Cyclicaly.Adjusted.PE.Ratio) - cyklicznie dostosowywany wskaźnik ceny do zysków. Definiuje się go jako cenę podzieloną przez średnią z dziesięciu lat zarobków, skorygowaną o inflację.
 
-```{r}
-SP.Composite %>%
-  ggplot(aes(x=Date)) +
-  geom_point(aes(y = S.P.Composite), color = "blue") +
-  geom_point(aes(y = Real.Price), color = "red") +
-  geom_point(aes(y = CPI), color = "yellow") +
-  ylim(0, 1000)
-```
-
 #### Podsumowanie danych
 
 ```{r}
@@ -270,7 +265,7 @@ Currency.Exchange.Rates %>%
 
 ***
 
-> ### Bitcoin price and trade volume
+> ### Bitcoin dataset
 
 #### Wczytywanie danych:
 
@@ -287,7 +282,41 @@ Bitcoin.trade.volume <- read.csv("C:/Users/alili/Desktop/studia/9 semestr/ZED/pr
                            col.names = c('Date',
                                       'Trade Volume'))
 
-head(Bitcoin.prices)
+Bitcoin.mine.difficulty <- read.csv("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/Bitcoin/BCHAIN-DIFF.csv",
+                           colClasses = c(rep("Date", 1),
+                                       rep("numeric", 1)),
+                           col.names = c('Date',
+                                      'Mine difficulty'))
+
+Bitcoin.hash.rate <- read.csv("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/Bitcoin/BCHAIN-HRATE.csv",
+                           colClasses = c(rep("Date", 1),
+                                       rep("numeric", 1)),
+                           col.names = c('Date',
+                                      'Hash rate'))
+Bitcoin <- Bitcoin.prices %>%
+  merge(Bitcoin.trade.volume, by = "Date") %>%
+  merge(Bitcoin.mine.difficulty, by = "Date") %>%
+  merge(Bitcoin.hash.rate, by = "Date")
+  
+```
+
+
+#### Podsumowanie danych:
+
+Zestaw danych zawiera codzienne informacje od początku istnienia Bitcoina.
+
+Znaczenie atrybutów:
+* USD - Bitcoin Market Price USD,Average USD market price across major bitcoin exchanges.
+* Trade volume - Bitcoin USD Exchange Trade Volume,The total USD value of trading volume on major bitcoin exchanges.
+* Mine difficulty - Bitcoin Difficulty,A relative measure of how difficult it is to find a new block. The difficulty is adjusted periodically as a function of how much hashing power has been deployed by the network of miners.
+* Hash rate - Bitcoin Hash Rate,The estimated number of tera hashes per second (trillions of hashes per second) the Bitcoin network is performing.
+
+
+
+
+```{r}
+tail(Bitcoin)
+summary(Bitcoin)
 ```
 
 
@@ -298,7 +327,7 @@ head(Bitcoin.prices)
 
 ***
 
-#### Animowany wykres zmiany liczby ludności w czasie (Wcisnąć play z puszczoną w tle piosenką Queen "Another One Bites the Dust"):
+#### Animowany wykres zmiany liczby ludności w czasie (Odpalić z puszczoną w tle piosenką Queen "Another One Bites the Dust"):
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=9,fig.height=6}
 specify_decimal <- function(x, k) trimws(format(round(x, k), nsmall=k))
@@ -403,7 +432,7 @@ coeff.gold.btc <- max(gold.btc$USD.BTC)/max(gold.btc$USD.gold)
 
 gold.btc %>%
   ggplot( aes(x = Date) ) +
-  geom_line( aes(y = USD.gold), color = 'yellow' ) +
+  geom_line( aes(y = USD.gold), color = 'gold' ) +
   geom_line( aes(y = USD.BTC/coeff.gold.btc), color = 'orange' ) + 
   scale_y_continuous(
     name = "Cena złota",
@@ -412,9 +441,9 @@ gold.btc %>%
   ggtitle("Cena złota oraz BTC [USD]") +
   theme_bw() + 
   theme(
-    axis.title.y = element_text(color = 'yellow', size=13),
+    axis.title.y = element_text(color = 'gold', size=13),
     axis.title.y.right = element_text(color = 'orange', size=13),
-    axis.text.y = element_text(color = 'yellow', size=13),
+    axis.text.y = element_text(color = 'gold', size=13),
     axis.text.y.right = element_text(color = 'orange', size=13)
   )
 ```
@@ -445,7 +474,7 @@ coeff.gold.SP <- max(gold.SP$S.P.Composite)/max(gold.SP$USD)
 
 gold.SP %>%
   ggplot( aes(x = Date) ) +
-  geom_line( aes(y = USD), color = 'orange' ) +
+  geom_line( aes(y = USD), color = 'gold' ) +
   geom_line( aes(y = S.P.Composite/coeff.gold.SP), color = 'royalblue' ) + 
   scale_y_continuous(
     name = "Cena złota",
@@ -454,14 +483,97 @@ gold.SP %>%
   ggtitle("Cena złota oraz indeksu S&P Composite [USD]") +
   theme_bw() + 
   theme(
-    axis.title.y = element_text(color = 'orange', size=13),
+    axis.title.y = element_text(color = 'gold', size=13),
     axis.title.y.right = element_text(color = 'royalblue', size=13),
-    axis.text.y = element_text(color = 'orange', size=13),
+    axis.text.y = element_text(color = 'gold', size=13),
     axis.text.y.right = element_text(color = 'royalblue', size=13)
   )
 ```
 
 Wniosek:
 Pomimo korelacji na poziomie 0.82 wizualna inspekcja nie pokazuje jasnej zależności pomiędzy cenami porównywanych aktywów.
+
+***
+
+#### Średnie kroczące na cenie złota
+
+```{}
+MA1 = 7
+MA2 = 19
+
+Gold.prices %>%
+  arrange(desc(row_number())) %>%
+  mutate(MA1 = SMA(USD, MA1),
+         MA2 = SMA(USD, MA2)) %>%
+  filter(!is.na(MA2))
+```
+
+#### Zbadanie najwyższych korelacji wskaźników rozwoju USA z ceną złota.
+
+```{r}
+USA.WDI <- World_Development_Indicators %>%
+  filter(`Country Name` == 'United States') %>%
+  merge(Gold.prices.yearly, by = 'Year') %>%
+  select_if(~ !any(is.na(.)))
+  
+USA.WDI.to_cor <- USA.WDI %>%
+  select(-(1:3))
+
+num_col=ncol(USA.WDI.to_cor[,-1])
+out_indx <-  which(upper.tri(diag(num_col))) 
+cor_cols <- USA.WDI.to_cor  %>%
+            do(melt(cor(.[,-1], use="pairwise.complete.obs"), value.name="cor")[out_indx,])
+
+cor_cols <- cor_cols %>%
+  filter(Var2 == 'USD') %>%
+  top_n(10) %>%
+  arrange(desc(cor)) %>%
+  rename(top_cor = cor)
+
+cor_cols
+
+```
+
+```{r}
+coeff.income_gold.price <- max(USA.WDI$`Net primary income (BoP, current US$)`)/max(USA.WDI$USD)
+
+USA.WDI %>%
+  ggplot( aes(x = Year) ) +
+  geom_line( aes(y = USD), color = 'gold' ) +
+  geom_line( aes(y = `Net primary income (BoP, current US$)`/coeff.income_gold.price), color = 'royalblue' ) + 
+  scale_y_continuous(
+    name = "Cena złota",
+    sec.axis = sec_axis(~.*coeff.gold.SP, name="Net primary income")
+  ) +
+  ggtitle("Cena złota w porównaniu ze wskaźnikiem przychodu netto w USA") +
+  theme_bw() + 
+  theme(
+    axis.title.y = element_text(color = 'gold', size=13),
+    axis.title.y.right = element_text(color = 'royalblue', size=13),
+    axis.text.y = element_text(color = 'gold', size=13),
+    axis.text.y.right = element_text(color = 'royalblue', size=13)
+  )
+```
+
+```{r}
+coeff.service_export.price <- max(USA.WDI$`Service exports (BoP, current US$)`)/max(USA.WDI$USD)
+
+USA.WDI %>%
+  ggplot( aes(x = Year) ) +
+  geom_line( aes(y = USD), color = 'gold' ) +
+  geom_line( aes(y = `Service exports (BoP, current US$)` / coeff.service_export.price), color = 'royalblue' ) + 
+  scale_y_continuous(
+    name = "Cena złota",
+    sec.axis = sec_axis(~.*coeff.gold.SP, name="Service exports")
+  ) +
+  ggtitle("Cena złota w porównaniu ze wskaźnikiem eksportu usług w USA") +
+  theme_bw() + 
+  theme(
+    axis.title.y = element_text(color = 'gold', size=13),
+    axis.title.y.right = element_text(color = 'royalblue', size=13),
+    axis.text.y = element_text(color = 'gold', size=13),
+    axis.text.y.right = element_text(color = 'royalblue', size=13)
+  )
+```
 
 
