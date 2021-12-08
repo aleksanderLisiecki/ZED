@@ -23,6 +23,7 @@ library(knitr)
 library(kableExtra)
 library(TTR)
 library(data.table)
+library(caret)
 ```
 
 ***
@@ -81,14 +82,16 @@ summary(Gold.prices)
 
 Na wykresie widzimy zmianę cen otwarcia w czasie.
 
-```{r}
-ggplot(Gold.prices, aes(x = Date)) +
-  geom_point(aes(y = Morning.Fix.USD), color = "gold")
+```{r, fig.width=9,fig.height=6}
+p <- ggplot(Gold.prices, aes(x = Date)) +
+  geom_point(aes(y = USD), color = "gold")
+
+ggplotly(p)
 ```
 
 ***
 
-> ### World development indicators
+> ### World development indicators (WDI)
 
 #### Wczytywanie zbioru danych
 
@@ -329,7 +332,7 @@ summary(Bitcoin)
 
 #### Animowany wykres zmiany liczby ludności w czasie (Odpalić z puszczoną w tle piosenką Queen "Another One Bites the Dust"):
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=9,fig.height=6}
+```{r, cache = TRUE, echo=FALSE, message=FALSE, warning=FALSE, fig.width=9,fig.height=6}
 specify_decimal <- function(x, k) trimws(format(round(x, k), nsmall=k))
 
 World.Population.Top10 <- World_Development_Indicators %>%
@@ -495,19 +498,6 @@ Pomimo korelacji na poziomie 0.82 wizualna inspekcja nie pokazuje jasnej zależn
 
 ***
 
-#### Średnie kroczące na cenie złota
-
-```{}
-MA1 = 7
-MA2 = 19
-
-Gold.prices %>%
-  arrange(desc(row_number())) %>%
-  mutate(MA1 = SMA(USD, MA1),
-         MA2 = SMA(USD, MA2)) %>%
-  filter(!is.na(MA2))
-```
-
 #### Zbadanie najwyższych korelacji wskaźników rozwoju USA z ceną złota.
 
 ```{r}
@@ -575,5 +565,136 @@ USA.WDI %>%
     axis.text.y.right = element_text(color = 'royalblue', size=13)
   )
 ```
+
+Wnioski: 
+Wskaźniki WDI są podawane rok rocznie. Próba korelacji różnych wskaźników WDI z ceną złota wskazuje głównie na wzrost gospodarczy. W próbie przewidywania ceny złota w ujęciu rocznym nie widzę sensu ze względu na zbyt małą ilość danych. 
+
+***
+
+#### Próba stworzenia modelu do przewidywnaia dobrego momentu kupna i sprzedaży złota.
+
+Zamiast przewidywać cenę złota, co w oparciu o posiadane dane będzie skazane na mizerny rezultat, stworzę model próbujący znaleźć w prostych wskaźnikach analizy technicznej dobre momenty do kupna lub sprzedaży złota.
+
+Moja próba oparta bedzie o strategię średnich kroczących (ang. Moving averages). Metoda ta polega na obliczeniu średniej ceny złota z okresu czasu o długości n wstecz. 
+
+Na podstawie wielu średnich kroczących stworzony zostanie klasyfikator próbujący przewidzieć dobry moment do kupna lub sprzedaży kruszca.
+
+
+##### Zaznaczanie miejsc dobrych do kupna i sprzedaży
+
+Pierwszym krokiem jest subiektywne zaznaczenie okresów w których warto było poszerzać oraz zawężać ekspozycję swojego portfela inwestycyjnego na złoto. 
+
+```{}
+Gold.prices %>% 
+  mutate(exposition = 0) %>%
+  write_xlsx("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/Gold_prices_to_mark_exposition.xlsx")
+  
+```
+
+Odczytanie nowego zbioru:
+
+```{r}
+Gold.prices <- read_excel("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/Gold_prices_with_marked_exposition.xlsx")
+```
+
+Czyszczenie zbioru:
+
+```{r}
+
+positive.exposition <- Gold.prices$exposition
+positive.exposition[Gold.prices$exposition == -1] <- 0
+
+negative.exposition <- Gold.prices$exposition
+negative.exposition[Gold.prices$exposition == 1] <- 0
+negative.exposition[Gold.prices$exposition == -1] <- 1
+
+Gold.prices <- Gold.prices %>%
+  mutate('positive.exposition' = positive.exposition,
+         'negative.exposition' = negative.exposition,)
+
+```
+
+Wykres przedstawiający miejsca kupna oraz sprzedaży:
+
+```{r}
+positive.diff <- diff(c(0, positive.exposition))
+positive.starts <- Gold.prices$Date[positive.diff == 1]
+positive.ends <- Gold.prices$Date[positive.diff == -1]
+if (length(positive.starts) > length(positive.ends)) positive.ends <- c(positive.ends, tail(Gold.prices$Date, 1))
+
+positive.sections <- data.frame(start=positive.starts, end=positive.ends, group=seq_along(positive.starts))
+
+
+negative.diff <- diff(c(0, negative.exposition))
+negative.starts <- Gold.prices$Date[negative.diff == 1]
+negative.ends <- Gold.prices$Date[negative.diff == -1]
+if (length(negative.starts) > length(negative.ends)) negative.ends <- c(negative.ends, tail(Gold.prices$Date, 1))
+
+negative.sections <- data.frame(start=negative.starts, end=negative.ends, group=seq_along(negative.starts))
+
+ggplot(data=Gold.prices, aes(Date, USD)) +
+  theme_minimal() +
+  geom_point(color = "gold") +
+  geom_rect(data=positive.sections, inherit.aes=FALSE, aes(xmin=start, xmax=end, ymin=min(Gold.prices$value),
+                ymax=max(Gold.prices$value), group=group), color="transparent", fill="green", alpha=0.4)+
+  geom_rect(data=negative.sections, inherit.aes=FALSE, aes(xmin=start, xmax=end, ymin=min(Gold.prices$value),
+                ymax=max(Gold.prices$value), group=group), color="transparent", fill="red", alpha=0.4)
+
+```
+
+Podsumowanie ilości dni dobrych do kupna oraz sprzedaży złota.
+
+```{r}
+positive.exposition.count <- data.frame(positive.exposition) %>%
+  filter(positive.exposition > 0) %>%
+  count() %>%
+  rename("positive exposition" = n)
+
+negative.exposition.count <- data.frame(negative.exposition) %>%
+  filter(negative.exposition > 0) %>%
+  count() %>%
+  rename("negative exposition" = n)
+
+data.frame(positive.exposition.count, negative.exposition.count) %>%
+  kable
+```
+
+Liczba miejsc do kupna jest znacznie wieksza niż miejsc do sprzedaży. Jest to spowodowane tym, że wzrost wartości złota jest powolny, a spadki szybkie.
+
+
+Obliczanie średnich kroczących:
+
+```{r}
+df <- Gold.prices
+  
+df %>%
+  arrange(desc(row_number())) %>%
+  mutate(MA1 = SMA(USD, 1),
+         MA3 = SMA(USD, 3),
+         MA7 = SMA(USD, 7),
+         MA11 = SMA(USD, 11),
+         MA19 = SMA(USD, 19),
+         MA27 = SMA(USD, 27),
+         MA50 = SMA(USD, 50),
+         MA100 = SMA(USD, 100),
+         MA200 = SMA(USD, 200),
+         MA365 = SMA(USD, 365),
+         MA730 = SMA(USD, 730),
+         MA1095 = SMA(USD, 1095)
+         ) %>%
+  filter_at(vars(-Date), all_vars(!is.na(.))) %>%
+  head
+
+  
+```
+
+
+Mmmm, jaki piękny zbiór na wykonanie modelu... już nie mogę się doczekać :3
+
+
+```{r}
+
+```
+
 
 
