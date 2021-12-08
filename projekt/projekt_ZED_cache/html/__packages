@@ -8,3 +8,5 @@ knitr
 kableExtra
 TTR
 data.table
+lattice
+caret

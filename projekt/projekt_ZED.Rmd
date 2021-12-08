@@ -7,13 +7,13 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-
-set.seed(23)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
 ```
 
 ## Użyte biblioteki
 
-```{r, message=FALSE}
+```{r}
 library(dplyr)
 library(plotly)
 library(ggplot2)
@@ -24,6 +24,8 @@ library(kableExtra)
 library(TTR)
 library(data.table)
 library(caret)
+
+set.seed(23)
 ```
 
 ***
