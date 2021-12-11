@@ -10,3 +10,5 @@ TTR
 data.table
 lattice
 caret
+corrplot
+RColorBrewer

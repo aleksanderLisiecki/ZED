@@ -1,14 +1,13 @@
 ---
-title: "projekt_ZED"
+title: "Projekt ZED"
 author: "Aleksander Lisiecki"
 date: "`r format(Sys.time(), '%d %B %Y')`"
 output: 
   html_document: 
-    toc: true
+    toc: yes
     toc_float:
-      collapsed: true
+      collapsed: yes
     toc_depth: 5
-    theme: united
 ---
 
 ```{r setup, include=FALSE}
@@ -16,6 +15,43 @@ knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(message = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
 ```
+
+***
+### Executive summary
+***
+
+Celem analizy jest interpretacja danych finansowych ceclem znalezienia wzorców wpływających na ceny różnych aktyw oraz wykonanie modelu potrafiącego zwrócić korzystne informacje dotyczące ceny złota.
+
+Wśród danych znalazły się:
+
+* kurs złota,
+* wskaźniki rozwoju gospodarczego świata,
+* dane dotyczące indeksu S&P Composite,
+* kurs wymiany walut,
+* dane z blockchainu Bitcoina,
+* subiektywnie wyznaczone dobre momenty na kupno i sprzedaż złota.
+
+W celu znalezienia możliwych korelacji w zbiorach dane zostały porównane ze sobą oraz sprawdzona została ich korelacja.
+W analizie zawarte zostały:
+
+* wizualizacja zmiany ludności w najliczniejszych krajach świata,
+* ukazany został trend dotyczący samobójstw na świecie,
+* zależność ceny złota do ceny Bitcoina,
+* zależność ceny złota do ceny indeksu S&P Composite,
+* 15 największych korelacji pomiędzy wskaźnikami największej gospodarki świata - USA, a ceną złota,
+
+W sekcji poświęconej próbie predykcji korzystnych informacji dotyczących ceny złota stworzony został klasyfikator próbujący przewidzieć dobry moment na kupno i sprzedaż kruszcu.
+
+
+Errata:
+Błędy z ggplotly:
+
+* w wynikowym HTML'u nie wyświetla się wykres samobójstw - w arkuszu .Rmd renderuje się on poprawnie,
+* w animowanym i interaktywnym wykresie prezentującym zmianę ludności w najliczniejszych krajach świata w pewnych miejscach niektóre słupki wykonują dziwne nieprzewidziane przemieszczenia. Jest to błąd frameworka, ponieważ przy zmianie ilości wyświetlanych krajów błędy te występują w różnych miejscach (latach).
+
+Błędy z kable_styling:
+
+* w wynikowym HTML'u w niektórych tabelach widoczny jest kod html psujący czytelność - w arkuszu .Rmd tabele renderują się poprawnie.
 
 ***
 ### Użyte biblioteki
@@ -32,6 +68,9 @@ library(kableExtra)
 library(TTR)
 library(data.table)
 library(caret)
+library(corrplot)
+library(RColorBrewer)
+library(randomForest)
 
 set.seed(23)
 ```
@@ -40,7 +79,7 @@ set.seed(23)
 ### Gold Prices
 ***
 
-#### Wczytywanie i czyszczenie danych:
+#### Wczytywanie i czyszczenie danych
 
 * nadanie właściwych typów danych,
 * pozostawienie do dalszych rozważań jedynie ceny w walucie USD,
@@ -78,7 +117,7 @@ Gold.prices.yearly <- Gold.prices %>%
 ```
 
 
-#### Podsumowanie danych:
+#### Podsumowanie danych
 
 Zbiór zawiera codzienne wyceny złota podczas sesji otwarcia i zamknięcia od dnia 1968-01-02 do 2021-09-29.
 
@@ -103,7 +142,8 @@ Na interaktywnym wykresie widzimy zmianę cen otwarcia w czasie.
 
 ```{r, fig.width=9,fig.height=6}
 p <- ggplot(Gold.prices, aes(x = Date)) +
-  geom_point(aes(y = USD), color = "gold")
+  geom_line(aes(y = USD), color = "gold") + 
+  theme_minimal()
 
 ggplotly(p)
 ```
@@ -123,7 +163,7 @@ World_Development_Indicators <- read_excel("C:/Users/alili/Desktop/studia/9 seme
                                            range = "A1:BC44305")
 ```
 
-#### Czyszczenie zbioru:
+#### Czyszczenie zbioru
 
 * usunięcie elementów innych niż kraje z kolumny `Country Name`, pozostawienie statystyk dla całego swiata w zbiorze krajów, 
 
@@ -157,9 +197,7 @@ World_Development_Indicators <- World_Development_Indicators %>%
   mutate(Year = as.numeric(substr(Year, 1, 4)))
 ```
 
-#### Podsumowanie danych:
-
-* liczba różnych wskaźników
+#### Podsumowanie danych
 
 ```{r}
 country.count <- length(unique(World_Development_Indicators$`Country Name`)) - 1
@@ -220,7 +258,7 @@ World_Development_Indicators %>%
 SP.Composite <- read.csv("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/S&P Composite.csv")
 ```
 
-#### Czyszczenie danych:
+#### Czyszczenie danych
 
 * zmiana nazwy oraz typ na właściwy kolumny z datą
 * zmiana nazwy Cyclicaly.Adjusted.PE.Ratio na skrót CAPE -
@@ -232,7 +270,7 @@ SP.Composite <- SP.Composite %>%
   mutate(Date = as.Date(Date))
 ```
 
-#### Znaczenie atrybutów:
+#### Znaczenie atrybutów
 
 * S.P.Composite - nominalna wartość indexu,
 * Divident - nominalna dywidenta,
@@ -243,6 +281,19 @@ SP.Composite <- SP.Composite %>%
 * Real.Divident - realna dywidenta,
 * Real.Earnings - realne zarobki na indeksie,
 * CAPE (Cyclicaly.Adjusted.PE.Ratio) - cyklicznie dostosowywany wskaźnik ceny do zysków. Definiuje się go jako cenę podzieloną przez średnią z dziesięciu lat zarobków, skorygowaną o inflację.
+
+```{r}
+plot.data_SP.Composite <- SP.Composite %>% 
+  pivot_longer(2:10) %>% 
+  filter(!is.na(value))
+
+plot.data_SP.Composite %>% 
+  ggplot(aes(x = Date, y = value)) + 
+  geom_line() +
+  facet_wrap(name ~ ., scales="free", ncol = 3) +
+  theme_minimal()
+```
+
 
 #### Podsumowanie danych
 
@@ -267,13 +318,13 @@ summary(SP.Composite) %>%
 ### Currency Exchange Rates
 ***
 
-#### Wczytywanie danych:
+#### Wczytywanie danych
 
 ```{r, cache=TRUE}
 Currency.Exchange.Rates <- read.csv("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/CurrencyExchangeRates.csv")
 ```
 
-#### Czyszczenie danych:
+#### Czyszczenie danych
 
 * zmiana typu kolumny z datą
 
@@ -282,7 +333,7 @@ Currency.Exchange.Rates <- Currency.Exchange.Rates %>%
   mutate(Date = as.Date(Date))
 ```
 
-#### Podsumowanie danych:
+#### Podsumowanie danych
 
 Zbiór zawiera codzienny kurs wymiany walut od dnia 1995-01-02 do 2018-05-02.
 
@@ -294,14 +345,13 @@ Currency.Exchange.Rates %>%
   kable %>%
   kable_styling("striped", full_width = F, position = 'left') %>%
   scroll_box(width = '400px', height = '400px')
-
 ```
 
 ***
 ### Bitcoin dataset
 ***
 
-#### Wczytywanie danych:
+#### Wczytywanie danych
 
 ```{r, cache=TRUE}
 Bitcoin.prices <- read.csv("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/Bitcoin/BCHAIN-MKPRU.csv",
@@ -335,7 +385,7 @@ Bitcoin <- Bitcoin.prices %>%
 ```
 
 
-#### Podsumowanie danych:
+#### Podsumowanie danych
 
 Zestaw danych zawiera codzienne informacje od początku istnienia Bitcoina.
 
@@ -349,19 +399,26 @@ Znaczenie atrybutów:
 
 
 ```{r}
-tail(Bitcoin)
-summary(Bitcoin)
+tail(Bitcoin) %>%
+  kable %>%
+  kable_styling("striped", full_width = F, position = 'left') 
+
+summary(Bitcoin) %>%
+  kable %>%
+  kable_styling("striped", full_width = F, position = 'left')
 ```
 
 
 ***
 ***
 
-### Analizy:
+### Analizy
 
 ***
 
-#### Animowany wykres zmiany liczby ludności w czasie (Odpalić z puszczoną w tle piosenką Queen "Another One Bites the Dust"):
+#### Animowany wykres zmiany liczby ludności w czasie 
+
+Odpalić z puszczoną w tle piosenką "Another One Bites the Dust" zespołu Queen.
 
 ```{r, cache = TRUE, echo=FALSE, message=FALSE, warning=FALSE, fig.width=9,fig.height=6}
 specify_decimal <- function(x, k) trimws(format(round(x, k), nsmall=k))
@@ -382,7 +439,7 @@ p <- World.Population.Top10 %>%
   geom_text(aes(frame = Year, y = `Population in mln`/2, label = `Country Name`), hjust = 0) +
   ylim(-10^8,1.6*10^9) +
   coord_flip() +
-  theme_bw() +
+  theme_minimal() +
   ggtitle("Populacja świata w latach 1970-2020") +
   theme(axis.line=element_blank(),
         axis.text.x=element_blank(),
@@ -390,21 +447,16 @@ p <- World.Population.Top10 %>%
         axis.ticks=element_blank(),
         axis.title.x=element_blank(),
         axis.title.y=element_blank(),
-        legend.position="none",
-        plot.title=element_text(size=22, hjust=0.5, face="bold", colour="grey")) 
+        legend.position="none") 
 
 ggplotly(p)
 ```
 
-```{r}
-World.Population.Top10 
-```
-
 ***
 
-#### Samobójstwa kobiet i mężczyzn na świecie w latach 2000-2019:
+#### Samobójstwa kobiet i mężczyzn na świecie w latach 2000-2019
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
+```{r}
 
 suicides <- World_Development_Indicators %>%
   filter(`Country Name` == 'World') %>%
@@ -423,24 +475,24 @@ suicides.female <- suicides %>%
 
 suicides.per.gender <- rbind.data.frame(suicides.male, suicides.female)
 
-suicides.per.gender %>%
+p <- suicides.per.gender %>%
   ggplot(aes(x = Year, y = `Suicide mortality rate (per 100,000 of given gender population)`)) +
   geom_line(aes(colour = gender), size = 1) +
   geom_point(colour = 'royalblue', size = 2) +
   expand_limits(y = 0) +
   ggtitle('Współczynnik samobójstw (na 100,000 osób danej płci)') +
   ylab('') +
-  theme_bw() -> p
-  ggplotly(p)
+  theme_minimal()
 
+ggplotly(p)
 ```
 
 Wniosek: 
-Liczba samobójstw jest w trendzie spadkowym, zdrowie psychiczne ludzkości się polepsza.  
+Liczba samobójstw na świecie spada. 
 
 ***
 
-#### Korelacja ceny złota do ceny BTC:
+#### Korelacja ceny złota do ceny BTC
 
 ```{r}
 gold <- Gold.prices %>%
@@ -459,8 +511,7 @@ BTC_price <- Bitcoin.prices %>%
 gold.btc <- gold %>%
   inner_join(BTC_price, by = 'Date')
 
-
-cor.gold.btc <- cor(gold.btc$USD.gold, gold.btc$USD.BTC, use = "complete.obs")
+print(paste("Korelacja złota z ceną Bitcoina: ", round(cor(gold.btc$USD.gold, gold.btc$USD.BTC, use = "complete.obs"))))
 
 coeff.gold.btc <- max(gold.btc$USD.BTC)/max(gold.btc$USD.gold)
 
@@ -473,7 +524,7 @@ gold.btc %>%
     sec.axis = sec_axis(~.*coeff.gold.btc, name="Cena BTC")
   ) +
   ggtitle("Cena złota oraz BTC [USD]") +
-  theme_bw() + 
+  theme_minimal() + 
   theme(
     axis.title.y = element_text(color = 'gold', size=13),
     axis.title.y.right = element_text(color = 'orange', size=13),
@@ -486,7 +537,7 @@ Wniosek:
 Pomimo korelacji na poziomie 0.68 wizualna inspekcja nie pokazuje jasnej zależności pomiędzy cenami porównywanych aktywów.
 
 
-#### Korelacja złota oraz BTC z indexem S&P Composite
+#### Korelacja złota z indexem S&P Composite
 
 ```{r}
 Gold.prices.monthly <- Gold.prices %>%
@@ -502,7 +553,7 @@ gold.SP <- Gold.prices.monthly %>%
   inner_join(SP.df, by = 'Date') %>%
   mutate(Date = as.Date(paste0(Date,'-01')))
 
-cor(gold.SP$USD, gold.SP$S.P.Composite, use = "complete.obs")
+print(paste("Korelacja złota z indeksem S&P Composite: ", round(cor(gold.SP$USD, gold.SP$S.P.Composite, use = "complete.obs"), 2)))
 
 coeff.gold.SP <- max(gold.SP$S.P.Composite)/max(gold.SP$USD)
 
@@ -515,7 +566,7 @@ gold.SP %>%
     sec.axis = sec_axis(~.*coeff.gold.SP, name="Cena S&P Composite")
   ) +
   ggtitle("Cena złota oraz indeksu S&P Composite [USD]") +
-  theme_bw() + 
+  theme_minimal() + 
   theme(
     axis.title.y = element_text(color = 'gold', size=13),
     axis.title.y.right = element_text(color = 'royalblue', size=13),
@@ -529,7 +580,7 @@ Pomimo korelacji na poziomie 0.82 wizualna inspekcja nie pokazuje jasnej zależn
 
 ***
 
-#### Zbadanie najwyższych korelacji wskaźników rozwoju USA z ceną złota.
+#### Zbadanie najwyższych korelacji wskaźników rozwoju USA z ceną złota
 
 ```{r}
 USA.WDI <- World_Development_Indicators %>%
@@ -547,13 +598,34 @@ cor_cols <- USA.WDI.to_cor  %>%
 
 cor_cols <- cor_cols %>%
   filter(Var2 == 'USD') %>%
-  top_n(10) %>%
+  top_n(15) %>%
   arrange(desc(cor)) %>%
-  rename(top_cor = cor)
+  rename("top correlations" = cor)
 
-cor_cols
-
+cor_cols %>%
+  kable %>%
+  kable_styling("striped", full_width = F, position = 'left')%>%
+  scroll_box(width = '100%')
 ```
+
+
+```{r}
+cor_cols %>% ggplot(aes(x = reorder(Var1, `top correlations`), 
+                        y = `top correlations`,
+                        label = sprintf("%0.2f", round(`top correlations`, digits = 2)))) +
+  geom_bar(position=position_dodge(), stat="identity",  colour="darkgrey", fill = 'lightgrey', width = 0.5) +
+  geom_text(size = 3, hjust = 1.2) +
+  theme_minimal() +
+  coord_flip() +
+  theme(axis.title = element_blank()) +
+  ggtitle("Top 15 korelacji złota z wskaźnikami WDI USA ")
+```
+
+Wnioski:
+
+Wskaźniki, które mają najwyższą korelację z ceną złota wskazują raczej na ogólny wzrost godspodarczy.
+
+
 
 ```{r}
 coeff.income_gold.price <- max(USA.WDI$`Net primary income (BoP, current US$)`)/max(USA.WDI$USD)
@@ -567,7 +639,7 @@ USA.WDI %>%
     sec.axis = sec_axis(~.*coeff.gold.SP, name="Net primary income")
   ) +
   ggtitle("Cena złota w porównaniu ze wskaźnikiem przychodu netto w USA") +
-  theme_bw() + 
+  theme_minimal() + 
   theme(
     axis.title.y = element_text(color = 'gold', size=13),
     axis.title.y.right = element_text(color = 'royalblue', size=13),
@@ -588,7 +660,7 @@ USA.WDI %>%
     sec.axis = sec_axis(~.*coeff.gold.SP, name="Service exports")
   ) +
   ggtitle("Cena złota w porównaniu ze wskaźnikiem eksportu usług w USA") +
-  theme_bw() + 
+  theme_minimal() + 
   theme(
     axis.title.y = element_text(color = 'gold', size=13),
     axis.title.y.right = element_text(color = 'royalblue', size=13),
@@ -598,37 +670,37 @@ USA.WDI %>%
 ```
 
 Wnioski: 
-Wskaźniki WDI są podawane rok rocznie. Próba korelacji różnych wskaźników WDI z ceną złota wskazuje głównie na wzrost gospodarczy. W próbie przewidywania ceny złota w ujęciu rocznym nie widzę sensu ze względu na zbyt małą ilość danych. 
+
+Wskaźniki WDI są podawane rok rocznie. 
+Uważamy, że próba przewidywania ceny złota w ujęciu rocznym ze względu na zbyt małą ilość danych nie będzie wartościowa. Zamiast prób tworzenia regresora przewidującego cenę złota spróbujemy przewidzieć dobry moment na kupno i sprzedaż kruszcu opierając się o wskaźniki analizy technicznej.
 
 ***
 
-#### Próba stworzenia modelu do przewidywnaia dobrego momentu kupna i sprzedaży złota.
+### Przewidywnaie dobrego momentu kupna i sprzedaży złota
 
-Zamiast przewidywać cenę złota, co w oparciu o posiadane dane będzie skazane na mizerny rezultat, stworzę model próbujący znaleźć w prostych wskaźnikach analizy technicznej dobre momenty do kupna lub sprzedaży złota.
+Zamiast przewidywać cenę złota stworzymy model próbujący znaleźć we wskaźnikach analizy technicznej dobre momenty do kupna lub sprzedaży złota.
 
-Moja próba oparta bedzie o strategię średnich kroczących (ang. Moving averages). Metoda ta polega na obliczeniu średniej ceny złota z okresu czasu o długości n wstecz. 
+Próba oparta bedzie o strategię średnich kroczących (ang. moving averages - MA). Metoda ta polega na obliczeniu średniej ceny złota z okresu czasu o długości N wstecz. 
 
-Na podstawie wielu średnich kroczących stworzony zostanie klasyfikator próbujący przewidzieć dobry moment do kupna lub sprzedaży kruszca.
+Poza prostymi średnimi kroczącymi (ang. simple moving averages - SMA) wykorzystana jest również wykładnicza średnia krocząca (ang. exponential moving average - EMA). EMA różni się od SMA tym, że podczas obliczania średniej na wartości nakładane są wykładnicze wagi, które maleją wraz z odległością próbki. 
+
+Średnie kroczące pozwalają na wygładzenie szumu z szeregów cenowych uwydatniając w ten sposób trendy. 
+Na podstawie wielu średnich kroczących można spróbować określić dobry moment kupna lub sprzedaży patrząc na ich miejsca przecinania.
 
 
 ##### Zaznaczanie miejsc dobrych do kupna i sprzedaży
 
-Pierwszym krokiem jest subiektywne zaznaczenie okresów w których warto było poszerzać oraz zawężać ekspozycję swojego portfela inwestycyjnego na złoto. 
+Pierwszym krokiem jest ręczne zaznaczenie okresów w których warto było poszerzać lub zawężać ekspozycję swojego portfela inwestycyjnego na złoto. 
 
-```{}
-Gold.prices %>% 
-  mutate(exposition = 0) %>%
-  write_xlsx("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/Gold_prices_to_mark_exposition.xlsx")
-  
-```
-
-Odczytanie nowego zbioru:
+##### Odczytanie zbioru z miejscami kupna/sprzedaży
 
 ```{r}
 Gold.prices <- read_excel("C:/Users/alili/Desktop/studia/9 semestr/ZED/projekt/Data pack/Gold_prices_with_marked_exposition.xlsx")
 ```
 
-Czyszczenie zbioru:
+##### Czyszczenie zbioru
+
+* wyodrębnienie miejsc kupna i sprzedaży do osobnych kolumn
 
 ```{r}
 
@@ -645,16 +717,15 @@ Gold.prices <- Gold.prices %>%
 
 ```
 
-Wykres przedstawiający miejsca kupna oraz sprzedaży:
+##### Wykres przedstawiający miejsca kupna oraz sprzedaży
 
-```{r}
+```{r, echo = FALSE}
 positive.diff <- diff(c(0, positive.exposition))
 positive.starts <- Gold.prices$Date[positive.diff == 1]
 positive.ends <- Gold.prices$Date[positive.diff == -1]
 if (length(positive.starts) > length(positive.ends)) positive.ends <- c(positive.ends, tail(Gold.prices$Date, 1))
 
 positive.sections <- data.frame(start=positive.starts, end=positive.ends, group=seq_along(positive.starts))
-
 
 negative.diff <- diff(c(0, negative.exposition))
 negative.starts <- Gold.prices$Date[negative.diff == 1]
@@ -665,6 +736,7 @@ negative.sections <- data.frame(start=negative.starts, end=negative.ends, group=
 
 ggplot(data=Gold.prices, aes(Date, USD)) +
   theme_minimal() +
+  ggtitle("Miejsca kupna oraz sprzedaży złota") +
   geom_line(color = "gold") +
   geom_rect(data=positive.sections, inherit.aes=FALSE, aes(xmin=start, xmax=end, ymin=min(Gold.prices$value),
                 ymax=max(Gold.prices$value), group=group), color="transparent", fill="green", alpha=0.4)+
@@ -673,7 +745,7 @@ ggplot(data=Gold.prices, aes(Date, USD)) +
 
 ```
 
-Podsumowanie ilości dni dobrych do kupna oraz sprzedaży złota.
+##### Podsumowanie ilości dni dobrych do kupna oraz sprzedaży złota
 
 ```{r}
 positive.exposition.count <- data.frame(positive.exposition) %>%
@@ -686,166 +758,356 @@ negative.exposition.count <- data.frame(negative.exposition) %>%
   count() %>%
   rename("negative exposition" = n)
 
-data.frame(positive.exposition.count, negative.exposition.count) %>%
-  print
+data.frame(nrow(Gold.prices) , positive.exposition.count, negative.exposition.count) %>%
+  rename("liczba próbek" = 1,
+         "positive exposition" = 2,
+         "negative exposition" = 3) %>%
+  kable %>%
+  kable_styling("striped", full_width = F, position = 'left')
 ```
 
-Liczba miejsc do kupna jest znacznie wieksza niż miejsc do sprzedaży. Jest to spowodowane tym, że wzrost wartości złota jest powolny, a spadki szybkie.
+Liczba miejsc do kupna jest znacznie wieksza niż miejsc do sprzedaży. Jest to spowodowane tym, że wzrost wartości złota jest powolny i jest więcej okazji do kupna, a spadki szybkie, napędzane emocjami inwestorów.
+
+Poza tym widać, że zbiór jest niezbalansowany.
 
 
-Obliczanie średnich kroczących:
+##### Obliczanie średnich kroczących
 
 ```{r}
-df.to.model <- Gold.prices %>%
+Gold.prices.with.MA <- Gold.prices %>%
   arrange(desc(row_number())) %>%
-  mutate(MA1 = SMA(USD, 1),
-         MA3 = SMA(USD, 3),
+  mutate(MA3 = SMA(USD, 3),
          MA7 = SMA(USD, 7),
-         MA11 = SMA(USD, 11),
-         MA19 = SMA(USD, 19),
-         MA27 = SMA(USD, 27),
-         MA50 = SMA(USD, 50),
-         MA100 = SMA(USD, 100),
-         MA200 = SMA(USD, 200),
-         MA365 = SMA(USD, 365),
-         MA730 = SMA(USD, 730),
-         MA1095 = SMA(USD, 1095)
-         ) %>%
-  filter_at(vars(-Date), all_vars(!is.na(.))) %>%
-  select(-(Date:USD), -positive.exposition, -negative.exposition) %>%
-  mutate(exposition = as.factor(exposition))
-  
-  
-  
-df.to.model <- Gold.prices %>%
-  arrange(desc(row_number())) %>%
-  mutate(MA1 = SMA(USD, 1),
-         MA3 = SMA(USD, 3),
-         MA7 = SMA(USD, 7),
+         EMA13 = EMA(USD, 13),
          MA19 = SMA(USD, 19),
          MA50 = SMA(USD, 50),
          MA200 = SMA(USD, 200),
          MA1095 = SMA(USD, 1095)
          ) %>%
-  filter_at(vars(-Date), all_vars(!is.na(.))) %>%
-  select(-(Date:USD), -positive.exposition, -negative.exposition) %>%
-  mutate(exposition = as.factor(exposition))
+  filter_at(vars(-Date), all_vars(!is.na(.))) 
 
-head(df.to.model)
-
+head(Gold.prices.with.MA) %>% 
+  kable() %>%
+  kable_styling("striped", full_width = F, position = 'left') %>%
+  scroll_box(width = '100%')
   
 ```
 
 Mmmm, jaki piękny zbiór na wykonanie modelu... już nie mogę się doczekać :3
 
-```{}
+##### Wykres prezentujący średnie kroczące we fragmencie kursu złota. 
 
-ggplot(data=df.to.model, aes(Date)) +
+```{r, echo = FALSE}
+plot.df <- Gold.prices.with.MA %>%
+  filter(Date > "2017-01-01") %>%
+  filter(Date < "2019-01-01")
+
+ggplot(data = plot.df, aes(Date)) +
   theme_minimal() +
+  ggtitle("EMA13 oraz MA19 nałożone na wykres złota") +
   geom_line(aes(y=USD), color = "gold") +
-  geom_line(aes(y=MA19), color = "black") +
-  geom_line(aes(y=MA100), color = "black") +
-  geom_line(aes(y=MA365), color = "black") 
+  geom_line(aes(y=EMA13), color = "blue") +
+  geom_line(aes(y=MA19), color = "black") 
 
 ```
 
-
-
-
-
-
+Na wykresie zauważyć można punkty przecięcia średnich kroczących, które sugerować mogą podjęcie operacji na rynku.
 
 ***
 
 #### Klasyfikator
 
-Podzielenie zbioru na zbiór treningowy oraz testowy.
-Zbiór nie jest dzielony w sposób losowy, aby zbiór testowy nie był podobny do zbioru treningowego.
+##### Podzielenie zbioru na zbiór treningowy oraz testowy
+
+Zbiór jest dzielony wedle chronologii próbek, nie w sposób losowy, aby zbiór testowy nie był podobny do zbioru treningowego.
 
 ```{r}
-training_set_percentage <- 75
+training_set_percentage <- 80
 
-training <- df.to.model[1:round(nrow(df.to.model)*training_set_percentage/100),]
-testing  <- df.to.model[-(1:round(nrow(df.to.model)*training_set_percentage/100)),]
+model.df <- Gold.prices.with.MA %>%
+  select(-(Date:USD), -positive.exposition, -negative.exposition) %>%
+  mutate(exposition = as.factor(exposition))
 
-nrow(testing) + nrow(training) == nrow(df.to.model)
+training <- model.df[1:round(nrow(model.df)*training_set_percentage/100),]
+testing  <- model.df[-(1:round(nrow(model.df)*training_set_percentage/100)),]
+
+stopifnot(nrow(testing) + nrow(training) == nrow(model.df))
 ```
 
-Random forest
+##### Stworzenie klasyfikatora
 
 ```{r}
-ctrl <- trainControl(
-    # powtórzona ocena krzyżowa
-    method = "repeatedcv",
-    # liczba podziałów
-    number = 2,
-    # liczba powtórzeń
-    repeats = 5)
+set.seed(23)
+
+seeds <- vector(mode = "list", length = 26)
+for(i in 1:25) seeds[[i]] <- sample.int(n=1000, 3)
+seeds[[26]] <- sample.int(n=1000, 1)
+
+ctrl <- trainControl(seeds = seeds)
 
 fit <- train(exposition ~ .,
              data = training,
              method = "rf",
              trControl = ctrl,
-             # Paramter dla algorytmu uczącego
-             ntree = 10)
-
-fit
+             ntree = 20)
 
 rfClasses <- predict(fit, newdata = testing)
 confusionMatrix(data = rfClasses, testing$exposition)
 ```
 
-Wagi dla klas
+##### Wnioski 
 
+Wyniki modelu są obiecujące, choć początkowo na to nie wskazują. 
+
+* Accuracy (dokładność) modelu jest na poziomie 60%.
+* Sensitivity (wrażliwość, czułość - wskaźnik wartości True Positive) przedziały czau w których warto było kupować były duże. Klasyfikator może wskazywać znacznie węższe przedziały i niskie wartosci dla klas kupna i sprzedaży w tym przypadku nie muszą oznaczać klasyfikatora niskiej jakości.
+* Specificity (specyficzność - wskaźnik wartości True Negative) klas sprzedaży oraz kupna jest bardzo wysokie co oznacza, że klasyfikator nie często myli się podczas predykcji tych miejsc - jest to dobry sygnał.
+* z macierzy pomyłek odczytać można, że model nie myli się pomiędzy klasami kupno-sprzedaż 
+
+Wynik modelu najlepiej będzie ocenić wizualnie wyświetlając miejsca, które model wskazał jako dobre do kupna lub sprzedaży.
+
+##### Ważność atrybutów
 
 ```{r}
-model_weights <- as.numeric(training$exposition)
-model_weights[training$exposition == -1] <- (1/table(training$exposition)[1]) * 0.5
-model_weights[training$exposition == 0] <- (1/table(training$exposition)[2]) * 0.1
-model_weights[training$exposition == 1] <- (1/table(training$exposition)[3]) * 0.4
+indicators.importance <- data.frame(importance(fit$finalModel)) %>%
+  mutate(names = rownames(.))
+
+indicators.importance %>%
+  ggplot(aes(x = reorder(names, -MeanDecreaseGini), 
+             y = MeanDecreaseGini)) +
+  geom_col() +
+  labs(x = "Atrybuty", y = "Ważność atrybutu") +
+  ggtitle("Ważności atrybutów") +
+  theme_minimal()
+
+```
+
+Model największą wagę przywiązuje do średnich kroczących z dłuższego okresu. Średnie liczone na dłuższym okresie bardziej wygładzają wykres i pokazują ogólny trend zachodzący w kursie. Przecięcia średnich krótszego okresu ze średnimi dłuższego okredu definitywnie pokazują zmianę trendu. Poleganie tylko na średnich długiego okresu nie jest dobre, ponieważ wraz z zwiększaniem okresu liczenia średniej wzrasta opóźnienie ich reakcji w stosunku do zmiany kursu.
+
+##### Wizualizacja predykcji 
+
+
+```{r, echo = FALSE}
+# predictions 
+df <- Gold.prices.with.MA %>%
+  mutate(prediction = predict(fit, newdata = Gold.prices.with.MA)) %>%
+  tail(nrow(testing))
+
+positive.prediction <- df$prediction
+positive.prediction[df$prediction == -1] <- 0
+
+negative.prediction <- df$prediction
+negative.prediction[df$prediction == 1] <- 0
+negative.prediction[df$prediction == -1] <- 1
+
+df <- df %>%
+  mutate('positive.prediction' = positive.prediction,
+         'negative.prediction' = negative.prediction,)
+
+positive.prediction.diff <- diff(c(0, positive.prediction))
+positive.prediction.starts <- df$Date[positive.prediction.diff == 1]
+positive.prediction.ends <- df$Date[positive.prediction.diff == -1]
+if (length(positive.prediction.starts) > length(positive.prediction.ends)) positive.prediction.ends <- c(positive.prediction.ends, tail(df$Date, 1))
+
+positive.prediction.sections <- data.frame(start=positive.prediction.starts, end=positive.prediction.ends, group=seq_along(positive.prediction.starts))
+
+
+negative.prediction.diff <- diff(c(0, negative.prediction))
+negative.prediction.starts <- df$Date[negative.prediction.diff == 1]
+negative.prediction.ends <- df$Date[negative.prediction.diff == -1]
+negative.prediction.ends <- negative.prediction.ends[-1]
+if (length(negative.prediction.starts) > length(negative.prediction.ends)) negative.prediction.ends <- c(negative.prediction.ends, tail(df$Date, 1))
+
+negative.prediction.sections <- data.frame(start=negative.prediction.starts, end=negative.prediction.ends, group=seq_along(negative.prediction.starts))
 
 
 
-
+ggplot(data=df, aes(Date, USD)) +
+  theme_minimal() +
+  geom_line(color = "gold") +
+  ggtitle("Miejsca kupna oraz sprzedaży złota wskazane przez model") +
+  geom_rect(data=positive.prediction.sections, inherit.aes=FALSE, aes(xmin=start, xmax=end, ymin=min(df$USD),
+                ymax=max(df$USD), group=group), color="transparent", fill="green", alpha=0.4)+
+  geom_rect(data=negative.prediction.sections, inherit.aes=FALSE, aes(xmin=start, xmax=end, ymin=min(df$USD),
+                ymax=max(df$USD), group=group), color="transparent", fill="red", alpha=0.4)
 
 ```
 
 
-```{}
 
-ctrl <- trainControl(
-    # powtórzona ocena krzyżowa
-    method = "repeatedcv",
-    # liczba podziałów
-    number = 2,
-    # liczba powtórzeń
-    repeats = 5,
-                     classProbs = TRUE)
+```{r, echo = FALSE}
+# train set
+df <- Gold.prices %>%
+  arrange(desc(row_number())) %>%
+  tail(nrow(testing))
 
-weighted_fit <- train(exposition ~ .,
-                      data = training,
-                      method = "gbm",
-                      verbose = FALSE,
-                      weights = model_weights,
-                      metric = "ROC",
-                      trControl = ctrl)
-fit <- train(exposition ~ .,
-             data = training,
-             method = "gbm",
-             trControl = ctrl,
-             weights = model_weights,
-             # Paramter dla algorytmu uczącego
-             ntree = 10)
+positive.exposition <- df$exposition
+positive.exposition[df$exposition == -1] <- 0
 
-fit
+negative.exposition <- df$exposition
+negative.exposition[df$exposition == 1] <- 0
+negative.exposition[df$exposition == -1] <- 1
 
-rfClasses <- predict(fit, newdata = testing)
-confusionMatrix(data = rfClasses, testing$exposition)
+df <- df %>%
+  mutate('positive.exposition' = positive.exposition,
+         'negative.exposition' = negative.exposition,)
+
+positive.diff <- diff(c(0, positive.exposition))
+positive.starts <- df$Date[positive.diff == 1]
+positive.ends <- df$Date[positive.diff == -1]
+if (length(positive.starts) > length(positive.ends)) positive.ends <- c(positive.ends, tail(Gold.prices$Date, 1))
+
+positive.sections <- data.frame(start=positive.starts, end=positive.ends, group=seq_along(positive.starts))
 
 
+negative.diff <- diff(c(0, negative.exposition))
+negative.starts <- df$Date[negative.diff == 1]
+negative.ends <- df$Date[negative.diff == -1]
+if (length(negative.starts) > length(negative.ends)) negative.ends <- c(negative.ends, tail(Gold.prices$Date, 1))
+
+negative.sections <- data.frame(start=negative.starts, end=negative.ends, group=seq_along(negative.starts))
 
 
+ggplot(data=df, aes(Date, USD)) +
+  theme_minimal() +
+  ggtitle("Porównanie zbioru testowego z predykcjami klasyfikatora") +
+  geom_line(color = "gold") +
+  geom_rect(data=positive.prediction.sections, inherit.aes=FALSE, aes(xmin=start, xmax=end, ymin=min(df$USD),
+                ymax=min(df$USD)+(max(df$USD)-min(df$USD))/2, group=group), color="transparent", fill="green", alpha=0.4)+
+  geom_rect(data=negative.prediction.sections, inherit.aes=FALSE, aes(xmin=start, xmax=end, ymin=min(df$USD),
+                ymax=min(df$USD)+(max(df$USD)-min(df$USD))/2, group=group), color="transparent", fill="red", alpha=0.4)+
+  geom_rect(data=positive.sections, inherit.aes=FALSE, aes(xmin=start, xmax=end, ymin=min(df$USD)+(max(df$USD)-min(df$USD))/2,
+                ymax=max(df$USD), group=group), color="transparent", fill="green", alpha=0.4)+
+  geom_rect(data=negative.sections, inherit.aes=FALSE, aes(xmin=start, xmax=end, ymin=min(df$USD)+(max(df$USD)-min(df$USD))/2,
+                ymax=max(df$USD), group=group), color="transparent", fill="red", alpha=0.4) +
+  geom_hline(yintercept = min(df$USD)+(max(df$USD)-min(df$USD))/2) +
+  geom_label(inherit.aes=FALSE,
+             aes(
+               label = "Predykcja klasyfikatora",
+               x = as.POSIXct('2015-03-01'),
+               y = 1500,
+               vjust = 'center'
+               )
+             ) +
+  geom_label(inherit.aes=FALSE,
+             aes(
+               label = "Wartości testowe",
+               x = as.POSIXct('2015-03-01'),
+               y = 1625,
+               vjust = 'center'
+               )
+             ) 
+             
 ```
 
+Wnioski:
+
+Model jest bardzo zachowawczy w swoich decyzjach i niepewnie decyduje się na inwestycje (pewnie z uwagi na duże przeuczenie - zauważone na sam koniec), jednak gdy już to zrobi robi to przeważnie trafnie. 
+Model wykazuje również tendencję do akumulacji aktywa i niechętnie je odsprzedaje.
+
+Metoda średnich kroczących nie jest skutecznym narzędziem podczas konsolidacji rynku.
+Zauważyć można, że model w momencie konsolidacji występującej w latach (około 2014 - 2019) nie popełnia wielu błędów i raczej ją przeczekał dokupując na dołkach. Sugeruje to potencjalnie wyższą skuteczność niż tradycyjna metoda.
+
+Utrudnieniem dla klasyfikatora jest fakt, że w ostatnich latach nastąpił znacznie większy ruch kursu złota w porównaniu do lat na których klasyfikator był uczony.
+
+Z eksperymentu widać, że zaproponowana metoda uczenia modelu znajdowania wzorców we wskaźnikach analizy technicznej zapowiada się obiecująco i w dalszych pracach można skupić się na dostrojeniu parametrów modelu oraz poszerzyć wachlarz dostępnych wskaźników. Zastanowić się również można nad dokładniejszym oznaczeniu miejsc kupna i sprzedaży.
 
 
+```{r, echo = FALSE}
+# predictions 
+df <- Gold.prices.with.MA %>%
+  mutate(prediction = predict(fit, newdata = Gold.prices.with.MA))
+
+positive.prediction <- df$prediction
+positive.prediction[1] <- 1
+positive.prediction[df$prediction == -1] <- 0
+
+negative.prediction <- df$prediction
+negative.prediction[1] <- 0
+negative.prediction[df$prediction == 1] <- 0
+negative.prediction[df$prediction == -1] <- 1
+
+df <- df %>%
+  mutate('positive.prediction' = positive.prediction,
+         'negative.prediction' = negative.prediction,)
+
+positive.prediction.diff <- diff(c(0, positive.prediction))
+positive.prediction.starts <- df$Date[positive.prediction.diff == 1]
+positive.prediction.ends <- df$Date[positive.prediction.diff == -1]
+
+positive.prediction.ends <- positive.prediction.ends[-1]
+
+if (length(positive.prediction.starts) > length(positive.prediction.ends)) positive.prediction.ends <- c(positive.prediction.ends, tail(df$Date, 1))
+
+positive.prediction.sections <- data.frame(start=positive.prediction.starts, end=positive.prediction.ends, group=seq_along(positive.prediction.starts))
+
+
+negative.prediction.diff <- diff(c(0, negative.prediction))
+negative.prediction.starts <- df$Date[negative.prediction.diff == 1]
+negative.prediction.ends <- df$Date[negative.prediction.diff == -1]
+if (length(negative.prediction.starts) > length(negative.prediction.ends)) negative.prediction.ends <- c(negative.prediction.ends, tail(df$Date, 1))
+
+negative.prediction.sections <- data.frame(start=negative.prediction.starts, end=negative.prediction.ends, group=seq_along(negative.prediction.starts))
+
+# train set
+df <- Gold.prices %>%
+  arrange(desc(row_number()))
+
+positive.exposition <- df$exposition
+positive.exposition[df$exposition == -1] <- 0
+
+negative.exposition <- df$exposition
+negative.exposition[df$exposition == 1] <- 0
+negative.exposition[df$exposition == -1] <- 1
+
+df <- df %>%
+  mutate('positive.exposition' = positive.exposition,
+         'negative.exposition' = negative.exposition,)
+
+positive.diff <- diff(c(0, positive.exposition))
+positive.starts <- df$Date[positive.diff == 1]
+positive.ends <- df$Date[positive.diff == -1]
+if (length(positive.starts) > length(positive.ends)) positive.ends <- c(positive.ends, tail(Gold.prices$Date, 1))
+
+positive.sections <- data.frame(start=positive.starts, end=positive.ends, group=seq_along(positive.starts))
+
+negative.diff <- diff(c(0, negative.exposition))
+negative.starts <- df$Date[negative.diff == 1]
+negative.ends <- df$Date[negative.diff == -1]
+if (length(negative.starts) > length(negative.ends)) negative.ends <- c(negative.ends, tail(Gold.prices$Date, 1))
+
+negative.sections <- data.frame(start=negative.starts, end=negative.ends, group=seq_along(negative.starts))
+
+ggplot(data=df, aes(Date, USD)) +
+  theme_minimal() +
+  ggtitle("Porównanie całego zbioru z predykcjami klasyfikatora") +
+  geom_line(color = "gold") +
+  geom_rect(data=positive.prediction.sections, inherit.aes=FALSE, aes(xmin=start, xmax=end, ymin=min(df$USD),
+                ymax=min(df$USD)+(max(df$USD)-min(df$USD))/2, group=group), color="transparent", fill="green", alpha=0.4)+
+  geom_rect(data=negative.prediction.sections, inherit.aes=FALSE, aes(xmin=start, xmax=end, ymin=min(df$USD),
+                ymax=min(df$USD)+(max(df$USD)-min(df$USD))/2, group=group), color="transparent", fill="red", alpha=0.4)+
+  geom_rect(data=positive.sections, inherit.aes=FALSE, aes(xmin=start, xmax=end, ymin=min(df$USD)+(max(df$USD)-min(df$USD))/2,
+                ymax=max(df$USD), group=group), color="transparent", fill="green", alpha=0.4)+
+  geom_rect(data=negative.sections, inherit.aes=FALSE, aes(xmin=start, xmax=end, ymin=min(df$USD)+(max(df$USD)-min(df$USD))/2,
+                ymax=max(df$USD), group=group), color="transparent", fill="red", alpha=0.4) +
+  geom_hline(yintercept = min(df$USD)+(max(df$USD)-min(df$USD))/2) +
+  geom_label(inherit.aes=FALSE,
+             aes(
+               label = "Predykcja klasyfikatora",
+               x = as.POSIXct('1975-01-01'),
+               y = 880,
+               vjust = 'center'
+               )
+             ) +
+  geom_label(inherit.aes=FALSE,
+             aes(
+               label = "Zbiór uczący + testowy",
+               x = as.POSIXct('1975-01-01'),
+               y = 1200,
+               vjust = 'center'
+               )
+             ) 
+             
+```
+
+Na tej wizualizacji widać przeuczenie modelu, które z uwagi na brak czasu nie zostało poprawione.
