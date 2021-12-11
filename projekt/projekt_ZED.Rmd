@@ -42,8 +42,10 @@ W analizie zawarte zostały:
 
 W sekcji poświęconej próbie predykcji korzystnych informacji dotyczących ceny złota stworzony został klasyfikator próbujący przewidzieć dobry moment na kupno i sprzedaż kruszcu.
 
+***
 
 Errata:
+
 Błędy z ggplotly:
 
 * w wynikowym HTML'u nie wyświetla się wykres samobójstw - w arkuszu .Rmd renderuje się on poprawnie,
@@ -676,7 +678,7 @@ Uważamy, że próba przewidywania ceny złota w ujęciu rocznym ze względu na 
 
 ***
 
-### Przewidywnaie dobrego momentu kupna i sprzedaży złota
+### Klasyfikator
 
 Zamiast przewidywać cenę złota stworzymy model próbujący znaleźć we wskaźnikach analizy technicznej dobre momenty do kupna lub sprzedaży złota.
 
@@ -687,6 +689,7 @@ Poza prostymi średnimi kroczącymi (ang. simple moving averages - SMA) wykorzys
 Średnie kroczące pozwalają na wygładzenie szumu z szeregów cenowych uwydatniając w ten sposób trendy. 
 Na podstawie wielu średnich kroczących można spróbować określić dobry moment kupna lub sprzedaży patrząc na ich miejsca przecinania.
 
+#### Przygotowanie danych
 
 ##### Zaznaczanie miejsc dobrych do kupna i sprzedaży
 
